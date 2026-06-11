@@ -11,11 +11,13 @@ variable "project_name" {
 }
 
 variable "allowed_origins" {
-  description = "Lista de orígenes permitidos por CORS. Usá el dominio del frontend en producción."
+  description = "Lista de orígenes permitidos por CORS."
   type        = list(string)
-  default     = ["*"]
+  default = [
+    "http://localhost:5173",
+    "https://d3b5ais4i62a9v.cloudfront.net"
+  ]
 }
-
 variable "log_retention_days" {
   description = "Días de retención para los logs de CloudWatch."
   type        = number
