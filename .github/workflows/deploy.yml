@@ -112,5 +112,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Terraform init for frontend outputs
+        run: terraform -chdir=infra init
+
       - name: Deploy frontend
-        run: npm run deploy:frontend
+        run: |
+         aws s3 sync dist/ "s3://$(terraform -chdir=infra output -raw frontend_bucket_name)" --delete
+
+         aws cloudfront create-invalidation \
+           --distribution-id "$(terraform -chdir=infra output -raw frontend_cloudfront_distribution_id)" \
+           --paths "/*"
