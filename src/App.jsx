@@ -111,30 +111,29 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    let timeoutId;
+useEffect(() => {
+  let timeoutId;
 
+  const procesarAuth = () => {
     try {
       if (handleAuthRedirect()) {
-        timeoutId = window.setTimeout(() => {
-          setAutenticado(true);
-        }, 0);
-
-        return () => window.clearTimeout(timeoutId);
+        setAutenticado(true);
+        return;
       }
     } catch (err) {
       setError(err.message);
+      return;
     }
 
-    if (!autenticado) {
-      return undefined;
+    if (autenticado) {
+      cargarClientes();
     }
+  };
 
-    timeoutId = window.setTimeout(cargarClientes, 0);
+  timeoutId = window.setTimeout(procesarAuth, 0);
 
-    return () => window.clearTimeout(timeoutId);
-  }, [autenticado, cargarClientes]);
-
+  return () => window.clearTimeout(timeoutId);
+}, [autenticado, cargarClientes]);
   const cerrarSesion = () => {
     setClientes([]);
     limpiarFormulario();
