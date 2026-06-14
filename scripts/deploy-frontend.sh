@@ -1,126 +1,33 @@
-name: Deploy clientes-aws
+#!/usr/bin/env bash
+set -euo pipefail
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '**'
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+INFRA_DIR="$ROOT_DIR/infra"
+DIST_DIR="$ROOT_DIR/dist"
 
-permissions:
-  contents: read
-  id-token: write
+if ! command -v aws >/dev/null 2>&1; then
+  echo "Error: aws CLI no está instalado o no está en el PATH." >&2
+  exit 1
+fi
 
-env:
-  WORKING_DIR: .
-  AWS_REGION: us-east-2
+if ! command -v terraform >/dev/null 2>&1; then
+  echo "Error: terraform no está instalado o no está en el PATH." >&2
+  exit 1
+fi
 
-jobs:
-  terraform:
-    name: Terraform apply
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/${{ env.WORKING_DIR }}/infra
-    outputs:
-      api_url: ${{ steps.outputs.outputs.api_url }}
-      cognito_domain: ${{ steps.outputs.outputs.cognito_domain }}
-      cognito_client_id: ${{ steps.outputs.outputs.cognito_client_id }}
-      frontend_url: ${{ steps.outputs.outputs.frontend_url }}
+cd "$ROOT_DIR"
+npm ci
+npm run build
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+BUCKET_NAME="$(terraform -chdir="$INFRA_DIR" output -raw frontend_bucket_name)"
+DISTRIBUTION_ID="$(terraform -chdir="$INFRA_DIR" output -raw frontend_cloudfront_distribution_id)"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
+if [[ ! -d "$DIST_DIR" ]]; then
+  echo "Error: no existe $DIST_DIR. Ejecutá npm run build antes de desplegar." >&2
+  exit 1
+fi
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
+aws s3 sync "$DIST_DIR/" "s3://$BUCKET_NAME" --delete
+aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
 
-      - name: Terraform init
-        run: terraform init
-
-      - name: Terraform fmt
-        run: terraform fmt -check
-
-      - name: Terraform validate
-        run: terraform validate
-
-      - name: Terraform apply
-        run: |
-          terraform apply -auto-approve \
-            -var="aws_region=${AWS_REGION}" \
-            -var='allowed_origins=${{ secrets.ALLOWED_ORIGINS_JSON }}' \
-            -var='cognito_callback_urls=${{ secrets.COGNITO_CALLBACK_URLS_JSON }}' \
-            -var='cognito_logout_urls=${{ secrets.COGNITO_LOGOUT_URLS_JSON }}'
-
-      - name: Export Terraform outputs
-        id: outputs
-        run: |
-          echo "api_url=$(terraform output -raw clientes_api_url)" >> "$GITHUB_OUTPUT"
-          echo "cognito_domain=$(terraform output -raw cognito_domain)" >> "$GITHUB_OUTPUT"
-          echo "cognito_client_id=$(terraform output -raw cognito_frontend_client_id)" >> "$GITHUB_OUTPUT"
-          echo "frontend_url=$(terraform output -raw frontend_custom_domain_url 2>/dev/null || terraform output -raw frontend_cloudfront_url)" >> "$GITHUB_OUTPUT"
-
-  frontend:
-    name: Build and deploy frontend
-    runs-on: ubuntu-latest
-    needs: terraform
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}/${{ env.WORKING_DIR }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-
-      - name: Configure frontend environment
-        run: |
-          cat > .env <<ENV
-          VITE_API_URL=${{ needs.terraform.outputs.api_url }}
-          VITE_COGNITO_DOMAIN=${{ needs.terraform.outputs.cognito_domain }}
-          VITE_COGNITO_CLIENT_ID=${{ needs.terraform.outputs.cognito_client_id }}
-          VITE_COGNITO_REDIRECT_URI=${{ needs.terraform.outputs.frontend_url }}
-          VITE_COGNITO_LOGOUT_URI=${{ needs.terraform.outputs.frontend_url }}
-          ENV
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
-
-      - name: Terraform init for frontend outputs
-        run: terraform -chdir=infra init
-
-      - name: Deploy frontend
-        run: |
-          aws s3 sync dist/ "s3://$(terraform -chdir=infra output -raw frontend_bucket_name)" --delete
-          aws cloudfront create-invalidation --distribution-id "$(terraform -chdir=infra output -raw frontend_cloudfront_distribution_id)" --paths "/*"
+echo "Frontend desplegado en S3 y CloudFront."
