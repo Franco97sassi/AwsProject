@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'Aws-Lambda/CRUD/clientes-aws/**'
+      - '.github/workflows/deploy.yml'
 
 permissions:
   contents: read
@@ -21,12 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ${{ env.WORKING_DIR }}/infra
+        working-directory: ${{ github.workspace }}/${{ env.WORKING_DIR }}/infra
     outputs:
       api_url: ${{ steps.outputs.outputs.api_url }}
       cognito_domain: ${{ steps.outputs.outputs.cognito_domain }}
       cognito_client_id: ${{ steps.outputs.outputs.cognito_client_id }}
       frontend_url: ${{ steps.outputs.outputs.frontend_url }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,7 +75,8 @@ jobs:
     needs: terraform
     defaults:
       run:
-        working-directory: ${{ env.WORKING_DIR }}
+        working-directory: ${{ github.workspace }}/${{ env.WORKING_DIR }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
