@@ -5,15 +5,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Aws-Lambda/CRUD/clientes-aws/**'
-      - '.github/workflows/deploy.yml'
-
+        - '**'
+ 
 permissions:
   contents: read
   id-token: write
 
 env:
-  WORKING_DIR: Aws-Lambda/CRUD/clientes-aws
+  WORKING_DIR: .
   AWS_REGION: us-east-2
 
 jobs:
