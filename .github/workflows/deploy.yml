@@ -5,8 +5,8 @@ on:
   push:
     branches: [main]
     paths:
-        - '**'
- 
+      - '**'
+
 permissions:
   contents: read
   id-token: write
@@ -27,6 +27,8 @@ jobs:
       cognito_domain: ${{ steps.outputs.outputs.cognito_domain }}
       cognito_client_id: ${{ steps.outputs.outputs.cognito_client_id }}
       frontend_url: ${{ steps.outputs.outputs.frontend_url }}
+      frontend_bucket_name: ${{ steps.outputs.outputs.frontend_bucket_name }}
+      frontend_cloudfront_distribution_id: ${{ steps.outputs.outputs.frontend_cloudfront_distribution_id }}
 
     steps:
       - name: Checkout
@@ -67,6 +69,8 @@ jobs:
           echo "cognito_domain=$(terraform output -raw cognito_domain)" >> "$GITHUB_OUTPUT"
           echo "cognito_client_id=$(terraform output -raw cognito_frontend_client_id)" >> "$GITHUB_OUTPUT"
           echo "frontend_url=$(terraform output -raw frontend_custom_domain_url 2>/dev/null || terraform output -raw frontend_cloudfront_url)" >> "$GITHUB_OUTPUT"
+          echo "frontend_bucket_name=$(terraform output -raw frontend_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "frontend_cloudfront_distribution_id=$(terraform output -raw frontend_cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
 
   frontend:
     name: Build and deploy frontend
@@ -91,7 +95,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ${{ env.WORKING_DIR }}/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Configure frontend environment
         run: |
@@ -112,13 +116,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Terraform init for frontend outputs
-        run: terraform -chdir=infra init
-
       - name: Deploy frontend
         run: |
-         aws s3 sync dist/ "s3://$(terraform -chdir=infra output -raw frontend_bucket_name)" --delete
+          aws s3 sync dist/ "s3://${{ needs.terraform.outputs.frontend_bucket_name }}" --delete
 
-         aws cloudfront create-invalidation \
-           --distribution-id "$(terraform -chdir=infra output -raw frontend_cloudfront_distribution_id)" \
-           --paths "/*"
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ needs.terraform.outputs.frontend_cloudfront_distribution_id }}" \
+            --paths "/*"
