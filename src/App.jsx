@@ -112,20 +112,25 @@ function App() {
   };
 
   useEffect(() => {
+    let timeoutId;
+
     try {
       if (handleAuthRedirect()) {
-        setAutenticado(true);
-        return;
+        timeoutId = window.setTimeout(() => {
+          setAutenticado(true);
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
       }
     } catch (err) {
       setError(err.message);
     }
 
     if (!autenticado) {
-      return;
+      return undefined;
     }
 
-    const timeoutId = window.setTimeout(cargarClientes, 0);
+    timeoutId = window.setTimeout(cargarClientes, 0);
 
     return () => window.clearTimeout(timeoutId);
   }, [autenticado, cargarClientes]);
