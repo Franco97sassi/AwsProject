@@ -1,5 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL;
-
+import { getToken } from "./auth";
 function getApiUrl() {
   if (!API_URL) {
     throw new Error("Falta configurar VITE_API_URL en el archivo .env");
@@ -25,7 +25,19 @@ async function parseResponse(response) {
 }
 
 async function request(url, options, errorMessage) {
-  const response = await fetch(url, options);
+ const token = getToken();
+
+  if (!token) {
+    throw new Error("Iniciá sesión para usar el CRUD de clientes");
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...options?.headers,
+    },
+  });
   const data = await parseResponse(response);
 
   if (!response.ok) {

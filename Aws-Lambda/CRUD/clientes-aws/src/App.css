@@ -18,6 +18,11 @@
   text-align: left;
   width: 100%;
 }
+.auth-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
 
 .header {
   margin-bottom: 28px;
